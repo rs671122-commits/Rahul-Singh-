@@ -1,0 +1,284 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == 'nafeessaudagar7@gmail.com' &&
+        request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+               'userId', 'fullName', 'email', 'phone', 'role', 'status',
+               'accessLevel', 'otpVerified', 'pinHash', 'walletBalance', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'fullName', 'email', 'phone', 'role', 'status',
+               'accessLevel', 'otpVerified', 'pinHash', 'walletBalance', 'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && isValidId(data.userId) &&
+             data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 80 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.phone is string && data.phone.size() <= 20 &&
+             data.role in ['user', 'admin'] &&
+             data.status in ['active', 'inactive', 'suspended', 'pending'] &&
+             data.accessLevel in ['standard', 'premium', 'restricted'] &&
+             data.otpVerified is bool &&
+             data.pinHash is string && data.pinHash.size() <= 200 &&
+             (data.walletBalance is int || data.walletBalance is float) && data.walletBalance >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['adminId', 'email', 'displayName', 'adminPinHash', 'createdAt']) &&
+             data.keys().hasOnly(['adminId', 'email', 'displayName', 'adminPinHash', 'createdAt', 'updatedAt']) &&
+             data.adminId is string && isValidId(data.adminId) &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.adminPinHash is string && data.adminPinHash.size() <= 200 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidRequest(data) {
+      return data.keys().hasAll([
+               'userId', 'userName', 'userEmail', 'type', 'title',
+               'description', 'amount', 'status', 'adminNote', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'userName', 'userEmail', 'type', 'title',
+               'description', 'amount', 'status', 'adminNote', 'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && isValidId(data.userId) &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+             data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 120 &&
+             data.type in ['deposit', 'withdrawal', 'access_upgrade', 'reactivation', 'support'] &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 100 &&
+             data.description is string && data.description.size() <= 500 &&
+             (data.amount is int || data.amount is float) && data.amount >= 0 &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.adminNote is string && data.adminNote.size() <= 300 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll([
+               'userId', 'userName', 'referenceCode', 'type', 'category',
+               'amount', 'status', 'note', 'createdByUid', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'userName', 'referenceCode', 'type', 'category',
+               'amount', 'status', 'note', 'createdByUid', 'createdAt'
+             ]) &&
+             data.userId is string && isValidId(data.userId) &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+             data.referenceCode is string && data.referenceCode.size() >= 3 && data.referenceCode.size() <= 64 &&
+             data.type in ['credit', 'debit', 'adjustment'] &&
+             data.category is string && data.category.size() >= 2 && data.category.size() <= 50 &&
+             (data.amount is int || data.amount is float) && data.amount > 0 &&
+             data.status in ['completed', 'pending', 'failed'] &&
+             data.note is string && data.note.size() <= 300 &&
+             data.createdByUid is string && isValidId(data.createdByUid) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'title', 'message', 'category', 'isRead', 'createdAt']) &&
+             data.keys().hasOnly(['userId', 'title', 'message', 'category', 'isRead', 'createdAt']) &&
+             data.userId is string && isValidId(data.userId) &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 100 &&
+             data.message is string && data.message.size() >= 2 && data.message.size() <= 400 &&
+             data.category in ['security', 'request', 'transaction', 'system'] &&
+             data.isRead is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll([
+               'userId', 'userName', 'subject', 'message', 'priority',
+               'status', 'adminReply', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'userName', 'subject', 'message', 'priority',
+               'status', 'adminReply', 'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && isValidId(data.userId) &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+             data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 120 &&
+             data.message is string && data.message.size() >= 5 && data.message.size() <= 800 &&
+             data.priority in ['normal', 'high', 'urgent'] &&
+             data.status in ['open', 'in_progress', 'resolved'] &&
+             data.adminReply is string && data.adminReply.size() <= 800 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().walletBalance == 0 &&
+                       (incoming().role == 'user' || (incoming().role == 'admin' && isBootstrappedAdmin())) &&
+                       incoming().status == 'active' &&
+                       incoming().accessLevel == 'standard';
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (request.auth.uid == userId &&
+                          incoming().role == existing().role &&
+                          incoming().status == existing().status &&
+                          incoming().accessLevel == existing().accessLevel &&
+                          incoming().walletBalance == existing().walletBalance &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phone', 'otpVerified', 'pinHash', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(adminId) &&
+                       isValidAdminRecord(incoming()) &&
+                       incoming().adminId == adminId &&
+                       (isAdmin() || (isBootstrappedAdmin() && request.auth.uid == adminId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(adminId) &&
+                       isValidAdminRecord(incoming()) &&
+                       incoming().adminId == existing().adminId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || (isBootstrappedAdmin() && request.auth.uid == adminId));
+
+      allow delete: if isSignedIn() && isValidId(adminId) && isAdmin() && adminId != request.auth.uid;
+    }
+
+    match /requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       isValidRequest(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       incoming().adminNote == '' &&
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid));
+
+      allow update: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       isValidRequest(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (existing().status == 'pending' || isAdmin()) &&
+                       isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       (isAdmin() || (existing().userId == request.auth.uid && existing().status == 'pending'));
+    }
+
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() && isValidId(transactionId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(transactionId) &&
+                       isValidTransaction(incoming()) &&
+                       isAdmin() &&
+                       incoming().createdByUid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(notificationId) &&
+                       isValidNotification(incoming()) &&
+                       (isAdmin() || (incoming().userId == request.auth.uid && incoming().category in ['security', 'system']));
+
+      allow update: if isSignedIn() &&
+                       isValidId(notificationId) &&
+                       isValidNotification(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() ||
+                        (existing().userId == request.auth.uid &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['isRead'])));
+
+      allow delete: if isSignedIn() &&
+                       isValidId(notificationId) &&
+                       (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /support_tickets/{ticketId} {
+      allow get: if isSignedIn() && isValidId(ticketId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(ticketId) &&
+                       isValidSupportTicket(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'open' &&
+                       incoming().adminReply == '';
+
+      allow update: if isSignedIn() &&
+                       isValidId(ticketId) &&
+                       isValidSupportTicket(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminReply', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(ticketId) && isAdmin();
+    }
+  }
+}

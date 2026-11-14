@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered user account with role-based access control, account status, OTP verification flag, encrypted PIN hash, and wallet balance.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the user." },
+        "fullName": { "type": "string", "description": "User full display name." },
+        "email": { "type": "string", "description": "User verified email address." },
+        "phone": { "type": "string", "description": "Contact phone number." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "RBAC role." },
+        "status": { "type": "string", "enum": ["active", "inactive", "suspended", "pending"], "description": "Account activation status." },
+        "accessLevel": { "type": "string", "enum": ["standard", "premium", "restricted"], "description": "User-wise access tier." },
+        "otpVerified": { "type": "boolean", "description": "Whether 6-digit OTP verification succeeded." },
+        "pinHash": { "type": "string", "description": "SHA-256 salted security PIN digest." },
+        "walletBalance": { "type": "number", "description": "Current wallet credit balance." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "fullName", "email", "phone", "role", "status", "accessLevel", "otpVerified", "pinHash", "walletBalance", "createdAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Authorized administrator record with encrypted admin PIN digest.",
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "string", "description": "Firebase Auth UID of the administrator." },
+        "email": { "type": "string", "description": "Administrator email address." },
+        "displayName": { "type": "string", "description": "Administrator display name." },
+        "adminPinHash": { "type": "string", "description": "SHA-256 salted admin passcode digest." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["adminId", "email", "displayName", "adminPinHash", "createdAt"]
+    },
+    "PanelRequest": {
+      "title": "PanelRequest",
+      "description": "User request for deposit, withdrawal, access upgrade, or account reactivation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "userName": { "type": "string", "description": "Owner display name." },
+        "userEmail": { "type": "string", "description": "Owner email." },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "access_upgrade", "reactivation", "support"], "description": "Request category." },
+        "title": { "type": "string", "description": "Short request title." },
+        "description": { "type": "string", "description": "Detailed request notes." },
+        "amount": { "type": "number", "description": "Optional monetary amount." },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Review state." },
+        "adminNote": { "type": "string", "description": "Resolution note from admin." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "userName", "userEmail", "type", "title", "description", "amount", "status", "adminNote", "createdAt"]
+    },
+    "TransactionRecord": {
+      "title": "TransactionRecord",
+      "description": "Immutable financial transaction ledger entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Target user UID." },
+        "userName": { "type": "string", "description": "Target user display name." },
+        "referenceCode": { "type": "string", "description": "Unique transaction reference code." },
+        "type": { "type": "string", "enum": ["credit", "debit", "adjustment"], "description": "Ledger direction." },
+        "category": { "type": "string", "description": "Category label such as Deposit or Withdrawal." },
+        "amount": { "type": "number", "description": "Positive transaction amount." },
+        "status": { "type": "string", "enum": ["completed", "pending", "failed"], "description": "Settlement status." },
+        "note": { "type": "string", "description": "Transaction description." },
+        "createdByUid": { "type": "string", "description": "Admin UID that recorded the transaction." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." }
+      },
+      "required": ["userId", "userName", "referenceCode", "type", "category", "amount", "status", "note", "createdByUid", "createdAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "User notification entry for security alerts, request decisions, and transactions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Recipient UID." },
+        "title": { "type": "string", "description": "Notification title." },
+        "message": { "type": "string", "description": "Notification body." },
+        "category": { "type": "string", "enum": ["security", "request", "transaction", "system"], "description": "Alert category." },
+        "isRead": { "type": "boolean", "description": "Read flag." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." }
+      },
+      "required": ["userId", "title", "message", "category", "isRead", "createdAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "User help and support ticket managed by admins.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Submitting user UID." },
+        "userName": { "type": "string", "description": "Submitting user display name." },
+        "subject": { "type": "string", "description": "Ticket subject." },
+        "message": { "type": "string", "description": "Ticket body." },
+        "priority": { "type": "string", "enum": ["normal", "high", "urgent"], "description": "Priority level." },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved"], "description": "Ticket resolution status." },
+        "adminReply": { "type": "string", "description": "Reply from support admin." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "userName", "subject", "message", "priority", "status", "adminReply", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles with account status and access control."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authorized admin registry and encrypted admin PIN hashes."
+    },
+    "/requests/{requestId}": {
+      "schema": { "$ref": "#/entities/PanelRequest" },
+      "description": "User requests reviewed and resolved by admins."
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/TransactionRecord" },
+      "description": "Immutable financial transaction ledger."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "Per-user notifications."
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Help & support tickets."
+    }
+  }
+}
